@@ -101,6 +101,30 @@ produce.ts  the shapes of line every producer writes        eoe.ts    build the 
 check/      layers.sh (the layers point one way), drift.ts (the walk's answers, compared)
 ```
 
+## Earlier studies
+
+EdgeOnEdge continues a line of experiments:
+[Reversible Function Graph](https://github.com/tomasflorian/ReversibleFunctionGraph)
+→ [StringWalk](https://github.com/tomasflorian/StringWalk) → EdgeOnEdge.
+
+**Reversible Function Graph** recorded function calls as strings and derived a graph
+that readers could walk forwards and backwards. Its walk exposed a limit: arguments
+beyond the first could be stored without ever being reachable in a table. The
+[postmortem](https://github.com/tomasflorian/ReversibleFunctionGraph/blob/HEAD/POSTMORTEM.md)
+explains how that led to a simpler unit.
+
+**StringWalk** made each fact three strings — `[value, relation, value]` — and built
+readings by walking through shared values. Kinds and verbs described each relation.
+It ended with an open question: if the values record what was found and the relation
+is someone's interpretation, how can another reader describe that connection without
+rewriting the original fact?
+
+**EdgeOnEdge** gives the connection itself an identity. The middle string identifies
+the link between its two ends; descriptions become tags on that link, and tags can
+themselves be tagged with vocabulary and provenance. The pile, joins through identical
+strings, and column walk carry forward. The continuing question is how much structure
+readers can build from the evidence after it arrives.
+
 ## Where it wants to go
 
 - **Identity from tags.** A set of tags that picks out one thing — "the 2021 linksys router"
