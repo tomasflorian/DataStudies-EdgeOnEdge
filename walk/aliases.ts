@@ -1,4 +1,4 @@
-// DISPLAY — the tuning files' aliases: what to call words on screen. Pure: text in, names
+// WALK — the tuning files' aliases: what to call words on screen. Pure: text in, names
 // out.
 //
 //   alias raised-by = raised by          say "raised by" wherever the word is raised-by

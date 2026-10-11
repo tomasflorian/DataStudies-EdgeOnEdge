@@ -9,8 +9,9 @@ and the structure you would normally declare up front is read off the data after
 whoever is looking.
 
 ```sh
-node eoe.ts                                     # build demo/pile.eoe, walk it at http://localhost:8788
-node eoe.ts more.eoe                            # the same, with lines from anywhere else unioned in
+node eoe.ts                                     # build the demo's layers, walk them at http://localhost:8788
+node eoe.ts more.eoe                            # the same, with lines from anywhere else as one more chip
+node eoe.ts --only demo/layers/base.eoe         # walk only the files named, as they are
 node cut.ts cutters/hosts.tsv demo/raw/hosts    # what one table says about one file
 node check/drift.ts --save; node check/drift.ts # remember the walk's answers, then see what moved
 ```
@@ -51,15 +52,48 @@ from the login, to the machine it came from, to its name in DNS.
 | **a join / foreign key** | the same string appearing in two places | joins come from the data, including between files that were never designed together |
 | **a namespace** | a vocabulary: IT's `host` and the party plan's `host` are different words | homonyms stay apart; a vocabulary also works as a filter you switch on and off |
 | **a class hierarchy** | the *tower*: `ip` sits under `address` | it can be **said** by someone (`broader address = ip host`) or **seen** in the data (every string found as `vault-note` is also found as `notes`); the page marks which |
-| **metadata columns** (source, created-by) | more tags: every link is tagged with the table that found it | provenance is data like any other, and can be tagged in turn |
-| **a migration** | a new cutter table, or a new version of one | old lines stay valid; a version bump changes only the "said by" tag |
-| **a constraint** | only well-formedness: a line is three strings, and an id means one line | data that fits no pattern is kept as text, not rejected |
+| **metadata columns** (source, created-by) | more lines: a text says which file it was read from, a tower step which tuning said it | provenance is data like any other, and can be tagged in turn |
+| **a migration** | a new cutter table, or a new version of one | the layers are rebuilt from the raw files, so the pile always holds what today's tables find |
+| **a constraint** | only well-formedness: a line is two ends, each a string or a reference to a line | data that fits no pattern is kept as text, not rejected |
 
-Underneath, everything is one shape — a line of three strings, `[left, middle, right]`, whose
-middle is a hash of its two ends. A line from a piece of text is a *link* (its right was
-found inside its left). A line from another line's middle is a *tag* on that line, and tags
-can be tagged too: that is how a word gets its role, its language, its source, and how a step
-in the tower says what it means.
+Underneath, everything is one shape — a line of two ends, `[left, right]`. An end is a string,
+a value, or a number, a reference to another line. A line's id is a hash of its two ends,
+worked out when it is read and never stored: a reference is a line folded up, and anyone
+holding the line can fold it the same way. So a value that happens to spell an id is still
+a value — the type says which is which. A line is an arrow from its type-ish end to its
+value-ish end: a whole before its part, a vocabulary before its word, a word before the
+finding it names. Everything more an arrow means is said by other lines:
+
+```text
+[130584905024476,"eoe: syslog\nSep 18 …"]                     this text was read from a file
+["Sep 18 … from 10.2.14.7 port 60211","10.2.14.7"]            the part was found inside the whole   (its id: 272325604139824)
+[29342904932423,272325604139824]                              that step is seen: the part is there in the whole
+["IT","ip"]                                                   a sense: the word ip, in IT           (its id: 156473796390586)
+[156473796390586,272325604139824]                             the finding carries the word ip
+[170628390243950,156473796390586]   ["<VOCABULARY>","IT"]     ip is a noun, and IT is a vocabulary
+```
+
+The numbers that are not explained there are words too: `130584905024476` is the line
+`["eoe","file"]`, `29342904932423` is `["eoe","seen"]` and `170628390243950` is
+`["eoe","noun"]` — words in the pile's own vocabulary, `eoe`.
+
+*Contains* is the steps said to be seen: steps whose right end is found inside their left,
+which anyone holding the two strings can check (`seen.ts` writes those claims). A word is a
+*sense*, an arrow from a vocabulary to a text, so IT's `host` and the party plan's `host` are
+two senses that meet at the string `host`. What a word is (noun, verb), where it sits in the
+tower (broader), who said a line (source) and which steps are seen are said with words in
+`eoe`, the few words the page knows by name (`core/markers.ts`). The only reserved string is
+`<VOCABULARY>`, which says a name is a vocabulary. `SPEC.md` describes the model in full.
+
+The pile is written in layers, files that are unioned when it is read. Nothing reads which
+layer a line came from, so any set of them makes a pile:
+
+```text
+base      what was read: each file's text, what was found inside what, and which steps are seen
+types     the words, and which words each finding carries
+lattice   the tunings' switches and tower
+files     where things came from: the file a text was read from, the tuning that said a line
+```
 
 ## Why give up the schema
 
@@ -80,11 +114,18 @@ shows those as they are, marked *seen*, rather than hiding them.
 
 ## Walking it
 
-Start from a type (`ip`). Each column is one step from a column to its left — down into a
-piece, or up to what contains it — and each row keeps the evidence for its join. The search
-box sits over the first column and holds that column only: type `paris` and the kinds list
-keeps the types that have it, and a reading keeps the rows whose first cell does. Switches on the left filter by vocabulary; a click on a cell shows the file lines
-it was read from, and a double-click starts a new reading from that one string.
+Start from a type (`ip`), or from *whole* or *part*: every string something was found
+inside, or every string found inside something — there whatever is loaded. Each column is one step from a column to its left — down into a piece,
+or up to what contains it — and each row keeps the evidence for its join. The search box sits
+over the first column and holds that column only: type `paris` and the kinds list keeps the
+types that have it, and a reading keeps the rows whose first cell does. Switches on the left
+filter by vocabulary; a click on a cell shows the file lines it was read from, and a
+double-click starts a new reading from that one string.
+
+Base is always loaded; *types*, *lattice* and *file names* are chips in the header. Switch
+one off and the reading stays, saying what the pile says without it: with base alone, steps
+are only `part` and `whole`; types name them and nest what the data shows (*seen*); the
+lattice adds what the tunings claim (*said*); file names give each cell its file and line.
 
 ## How the pieces fit
 
@@ -93,11 +134,13 @@ Each raw file names what it is on its first line (`eoe: zone-file`). The tables 
 vocabulary. The files in `tunings/` add filters, tower claims and display names.
 
 ```text
-core/       lines: identity, parse, union, check, index
-middle/     the pile by position: links, tags, ends
-display/    the column walk, and display names
+core/       lines: identity, parse, union, check, index; moves: up and down; the markers, the few
+            words the view knows by name
+walk/       the column walk, one concern per file — words, structure, switches, lattice,
+            types, files, steps, reading, kinds — its server, and its page
 cascade.ts  cutting (cut.ts runs one table on one file)     tune.ts   the tunings, as lines
-produce.ts  the shapes of line every producer writes        eoe.ts    build the pile, serve
+produce.ts  the shapes of line every producer writes, and the layers   seen.ts   which steps are seen
+eoe.ts      build the layers, serve                                    SPEC.md   the model
 check/      layers.sh (the layers point one way), drift.ts (the walk's answers, compared)
 ```
 

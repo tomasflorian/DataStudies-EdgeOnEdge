@@ -1,64 +1,66 @@
-// What every producer shares: the shapes of line a producer writes. cascade.ts is the one
-// producer; a cutter is a table it reads.
-// Producers import core/ only — never middle/ or display/.
+// What every producer shares: the shapes of line a producer writes. cascade.ts and tune.ts
+// are the producers; a cutter is a table cascade.ts reads.
+// Producers import core/ only — never walk/.
 //
 // All pure. An id is computed from content, so a producer never has to remember what it
 // wrote: it can point at a line again by recomputing its id. Two producers writing the same
-// line write the same line, and union collapses them; each says it said it with a tag.
-
-import { id } from "./core/identity.ts";
-import type { Line } from "./core/lines.ts";
-
-// The only primitive: connect two things. From a plain string it is a link (right found
-// inside left); from an id it is a tag on that line.
-export const line = (left: string, right: string): Line => [left, id(left, right), right];
-
-// --- words --------------------------------------------------------------------------
-// A word is text found in a vocabulary: a link from the vocabulary's name to the text, so
-// its id is that link's. Every word is tagged <WORD>, and its roles (<NOUN>, <VERB> …) are
-// more tags on it. The markers are words too, found in the vocabulary "eoe"; <WORD> is the
-// one that is not tagged, since it is where tagging a word starts.
+// line write the same line, and union collapses them; each says it said it with a line of
+// its own.
 //
-// The same text in the same vocabulary is one word, whichever producer writes it.
+// A producer writes each line into a layer: a file of its own, unioned with the others when
+// the pile is read. A layer groups lines only so they can be loaded or left out together —
+// nothing reads which layer a line came from — and each brings the eoe words it uses, so any
+// set of layers reads on its own:
+//
+//   base      what was read: each file's text, said to be a file, what was found inside what,
+//             and which of those steps are seen (seen.ts)
+//             inside what, [whole, id, part]
+//   types     the words — senses with their roles — and which words each finding carries
+//   lattice   the tunings' switches and tower
+//   files     where things came from: the file each text was read from, and the tuning that
+//             said each of its lines
+//
+// The walk always reads base; the other three are what a reader switches on and off.
 
-export const WORD = "<WORD>";
-export const MARKERS = "eoe";
-const wordMark = line(MARKERS, WORD);
-const marker = (name: string): Line[] => {
-  const found = line(MARKERS, name);
-  return [found, line(found[1], wordMark[1])];
-};
+import { lineOf, type End, type Line } from "./core/lines.ts";
+import { SAID_BY, SYSTEM, VOCABULARY, systemWordText } from "./core/markers.ts";
 
-// A marker, as a word: its id, and the lines that make it one.
-export function markerWord(name: string): { id: string; lines: Line[] } {
-  const lines = [wordMark, ...marker(name)];
-  return { id: lines[1][1], lines };
+// Every line is written type-ish end first (SPEC.md, section 3): a whole before its part, a
+// vocabulary before its word, a word before the finding it names, a broader word before a
+// narrower one, a marker or a source before what it marks or said. The fixed order is what
+// makes two producers writing the same claim write the same line.
+export const line = (left: End, right: End): Line => lineOf(left, right);
+
+export type Layers = { base: Line[]; types: Line[]; lattice: Line[]; files: Line[] };
+export const noLayers = (): Layers => ({ base: [], types: [], lattice: [], files: [] });
+export const LAYER_NAMES = Object.keys(noLayers()) as (keyof Layers)[];
+
+// --- senses -------------------------------------------------------------------------
+// A word is a sense: a line from a vocabulary's name to a text, "IT" → "ip". The same text in
+// two vocabularies is two senses, meeting at the text; the same text in the same vocabulary is
+// one sense, whichever producer writes it. Its roles (noun, verb …) are eoe words, each a line
+// from the word to the sense; the words come along, so the layer says what they are.
+export function sense(vocabulary: string, text: string, roles: End[] = []): { id: number; lines: Line[] } {
+  const arrow = line(vocabulary, text);
+  const roleWords = roles.flatMap((role) => (typeof role === "number" && systemWordText.has(role) ? systemWord(systemWordText.get(role)!) : []));
+  return { id: arrow[1], lines: [arrow, line(VOCABULARY, vocabulary), ...roles.map((role) => line(role, arrow[1])), ...roleWords] };
 }
 
-export function word(vocabularyName: string, text: string, roles: string[] = []): { id: string; lines: Line[] } {
-  const found = line(vocabularyName, text);
-  return {
-    id: found[1],
-    lines: [
-      wordMark, found, line(found[1], wordMark[1]),
-      ...roles.flatMap((role) => { const [roleWord, ...its] = marker(role); return [roleWord, ...its, line(found[1], roleWord[1])]; }),
-    ],
-  };
+// One of the pile's own words, as lines: its sense in eoe, and that eoe is a vocabulary.
+export const systemWord = (text: string): Line[] => sense(SYSTEM, text).lines;
+
+// Who said a line: a line from the source's name to it; the name is said to be a source.
+export function saidBy(lineId: number, source: string): Line[] {
+  return [line(source, lineId), line(SAID_BY, source), ...systemWord("source")];
 }
 
-// Who said a line: a tag on it with the producer's name, a word in the vocabulary "sources"
-// playing the role <SAID-BY>.
-export const SOURCES = "sources";
-export const SAID_BY = "<SAID-BY>";
-export function saidBy(lineId: string, source: string): Line[] {
-  const one = word(SOURCES, source, [SAID_BY]);
-  return [...one.lines, line(lineId, one.id)];
-}
-
-// Every word some lines found: its id, vocabulary and text — the links tagged <WORD>.
-export function wordsIn(lines: Line[]): { id: string; vocabulary: string; text: string }[] {
-  const tagged = new Set(lines.filter(([, , right]) => right === wordMark[1]).map(([left]) => left));
-  return lines.filter(([, middle]) => tagged.has(middle)).map(([vocabularyName, middle, text]) => ({ id: middle, vocabulary: vocabularyName, text }));
+// Every sense some senses-layer lines hold: its id, vocabulary and text. A sense is a line down
+// from its vocabulary to its word. The pile's own words, in eoe, are not senses the data was
+// cut into, so they are left out.
+export function sensesIn(senseLines: Line[]): { id: number; vocabulary: string; text: string }[] {
+  const vocabularies = new Set(senseLines.filter(([left, , name]) => left === VOCABULARY && name !== SYSTEM).map(([, , name]) => name));
+  return senseLines.flatMap(([vocabulary, middle, text]) =>
+    typeof vocabulary === "string" && typeof text === "string" && vocabularies.has(vocabulary) ? [{ id: middle, vocabulary, text }] : []);
 }
 
 // A raw file as the runner read it.
