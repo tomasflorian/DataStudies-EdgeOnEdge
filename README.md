@@ -1,3 +1,13 @@
+
+
+<br><br><br>
+
+> **Archived: Use this repo instead: (https://github.com/tomasflorian/DataStudies).**
+
+
+
+<br><br><br>
+
 # EdgeOnEdge
 
 *Data Studies: EdgeOnEdge, September 2026*
